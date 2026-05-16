@@ -938,9 +938,8 @@ export default function App() {
         try {
           const { url } = await createCheckout(selectedPlan);
           window.location.href = url;
-        } catch {
-          // Stripe not set up yet — go to plan picker
-          setPage('plan-picker');
+        } catch (e: any) {
+          alert('Checkout error: ' + (e?.error || e?.message || JSON.stringify(e)));
         }
       } else {
         setPage('plan-picker');
