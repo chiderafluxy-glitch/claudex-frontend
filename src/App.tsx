@@ -800,9 +800,18 @@ const SignupForm = ({ selectedPlan, onSubmit, onLogin, onNavigate, error, loadin
   const [password, setPassword] = React.useState('');
   const [confirm, setConfirm] = React.useState('');
   const [localError, setLocalError] = React.useState<string | null>(null);
+  
+  // Standard email validation - accepts common email formats
+  const isValidEmail = (email: string): boolean => {
+    // Simple, permissive validation that accepts standard email formats
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+  
   const submit = () => {
     setLocalError(null);
     if (!email || !password) { setLocalError('Email and password are required'); return; }
+    if (!isValidEmail(email)) { setLocalError('Please enter a valid email address'); return; }
     if (password !== confirm) { setLocalError('Passwords do not match'); return; }
     if (password.length < 8) { setLocalError('Password must be at least 8 characters'); return; }
     onSubmit(email, password);
@@ -817,7 +826,7 @@ const SignupForm = ({ selectedPlan, onSubmit, onLogin, onNavigate, error, loadin
       {(error || localError) && (
         <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-800/40 text-red-400 text-sm">{localError || error}</div>
       )}
-      <Input label="Email address" type="email" placeholder="you@example.com" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
+      <Input label="Email address" type="text" placeholder="you@example.com" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
       <Input label="Password" type="password" placeholder="••••••••" value={password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} />
       <Input label="Confirm password" type="password" placeholder="••••••••" value={confirm} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirm(e.target.value)} />
       <Button className="w-full py-3 mt-4" onClick={submit} disabled={loading}>{loading ? 'Creating account...' : 'Create Account'}</Button>
@@ -844,7 +853,7 @@ const LoginForm = ({ onSubmit, onSignup, error, loading }: {
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-800/40 text-red-400 text-sm">{error}</div>
       )}
-      <Input label="Email address" type="email" placeholder="you@example.com" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
+      <Input label="Email address" type="text" placeholder="you@example.com" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
       <div className="relative">
         <Input label="Password" type="password" placeholder="••••••••" value={password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} />
         <button className="absolute top-0 right-0 text-[10px] font-bold text-cl-accent hover:underline uppercase tracking-widest">Forgot password?</button>
