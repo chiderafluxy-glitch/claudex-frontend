@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  /* Claude Code Sophisticated Dark Design Tokens */
+  --color-cl-bg: #141413;
+  --color-cl-surface: #1a1917;
+  --color-cl-border: #2a2926;
+  --color-cl-accent: #d97757;
+  --color-cl-accent-hover: #c6684a;
+  --color-cl-text: #faf9f5;
+  --color-cl-muted: #6b6a65;
+  --color-cl-sub-text: #a3a29d;
+  --color-cl-interactive: #2a2926;
+  --color-cl-interactive-hover: #32312e;
+
+  /* Sparkles-inspired tokens (adapted for dark theme) */
+  --color-spark-bg: #141413;
+  --color-spark-surface: #1a1917;
+  --color-spark-border: #2a2926;
+  --color-spark-muted: #52525c;
+  
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+}
+
+@layer base {
+  body {
+    @apply bg-cl-bg text-cl-text font-sans selection:bg-cl-accent/30;
+  }
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+code {
+  @apply bg-cl-interactive px-1 rounded text-[0.9em] text-cl-accent font-mono;
+}
