@@ -977,7 +977,9 @@ export default function App() {
       const { url } = await createCheckout(plan);
       window.location.href = url;
     } catch (e: any) {
-      alert('Checkout error: ' + (e?.error || e?.message || JSON.stringify(e)));
+      const msg = e?.error || e?.message || JSON.stringify(e);
+      console.error('Checkout error details:', e);
+      alert('Checkout error: ' + msg + ' | Plan: ' + plan);
     }
   };
 
