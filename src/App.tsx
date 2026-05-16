@@ -979,7 +979,7 @@ export default function App() {
     } catch (e: any) {
       const msg = e?.error || e?.message || JSON.stringify(e);
       console.error('Checkout error details:', e);
-      alert('Checkout error: ' + msg + ' | Plan: ' + plan);
+      alert('Checkout error: ' + msg + ' | Plan: ' + plan + ' | URL: ' + import.meta.env.VITE_BACKEND_URL + '/api/checkout');
     }
   };
 
