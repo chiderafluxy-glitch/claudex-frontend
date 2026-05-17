@@ -938,8 +938,9 @@ export default function App() {
         try {
           const { url } = await createCheckout(selectedPlan);
           window.location.href = url;
-        } catch (e: any) {
-          alert('Checkout error: ' + (e?.error || e?.message || JSON.stringify(e)));
+        } catch {
+          // Stripe not set up yet — go to plan picker
+          setPage('plan-picker');
         }
       } else {
         setPage('plan-picker');
@@ -977,9 +978,7 @@ export default function App() {
       const { url } = await createCheckout(plan);
       window.location.href = url;
     } catch (e: any) {
-      const msg = e?.error || e?.message || JSON.stringify(e);
-      console.error('Checkout error details:', e);
-      alert('Checkout error: ' + msg + ' | Plan: ' + plan + ' | URL: ' + import.meta.env.VITE_BACKEND_URL + '/api/checkout');
+      setPage('onboarding');
     }
   };
 
