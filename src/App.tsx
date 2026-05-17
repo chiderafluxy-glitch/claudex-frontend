@@ -907,8 +907,9 @@ export default function App() {
       setPage('landing');
     }
     if (params.get('session_id')) {
-      // Checkout successful - wait for webhook to update profile, then go to onboarding
+      // Checkout successful - go to onboarding
       window.history.replaceState({}, '', '/onboarding');
+      setPage('onboarding');
     }
 
     supabase.auth.getSession().then(async ({ data }) => {
