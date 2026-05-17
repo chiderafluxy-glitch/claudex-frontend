@@ -1028,7 +1028,7 @@ export default function App() {
 
         {page === 'signup' && (
           <motion.div key="signup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute top-4 left-4">
+            <div className="absolute top-20 left-4 z-50">
               <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
                 ← Back to Home
               </button>
@@ -1051,7 +1051,7 @@ export default function App() {
 
         {page === 'login' && (
           <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute top-4 left-4">
+            <div className="absolute top-20 left-4 z-50">
               <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
                 ← Back to Home
               </button>
@@ -1072,7 +1072,7 @@ export default function App() {
 
         {page === 'plan-picker' && (
           <motion.div key="plans" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute top-4 left-4">
+            <div className="absolute top-20 left-4 z-50">
               <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
                 ← Back to Home
               </button>
@@ -1108,7 +1108,7 @@ export default function App() {
 
         {page === 'onboarding' && (
           <motion.div key="onboarding" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-             <div className="absolute top-4 left-4">
+             <div className="absolute top-20 left-4 z-50">
                <button onClick={async () => {
                  try {
                    await skipOnboarding();
