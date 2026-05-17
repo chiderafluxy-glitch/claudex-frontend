@@ -925,15 +925,14 @@ export default function App() {
         try {
           const profile = await getProfile();
           setUser({ email: profile.email, plan: profile.plan });
-          // Priority: if not onboarded yet, go to onboarding (even if subscription check hasn't updated)
-          // Only go to plan-picker if they never had a subscription
+          // Check subscription first: if they paid (active/past_due) and not onboarded → onboarding
+          // If no subscription → plan-picker (need to pay)
+          // If both done → dashboard
           const hasSubscription = profile.subscription_status === 'active' || profile.subscription_status === 'past_due';
-          if (!profile.onboarding_complete && hasSubscription) {
-            setPage('onboarding');
-          } else if (!profile.onboarding_complete) {
-            setPage('onboarding'); // Still go to onboarding if no sub - they can skip
-          } else if (!hasSubscription) {
+          if (!hasSubscription) {
             setPage('plan-picker');
+          } else if (!profile.onboarding_complete) {
+            setPage('onboarding');
           } else {
             setPage('dashboard');
           }
@@ -1003,14 +1002,14 @@ export default function App() {
       }
       const profile = await getProfile();
       setUser({ email: profile.email, plan: profile.plan });
-      // Priority: if not onboarded yet, go to onboarding (even if subscription check hasn't updated)
+      // Check subscription first: if they paid (active/past_due) and not onboarded → onboarding
+      // If no subscription → plan-picker (need to pay)
+      // If both done → dashboard
       const hasSubscription = profile.subscription_status === 'active' || profile.subscription_status === 'past_due';
-      if (!profile.onboarding_complete && hasSubscription) {
-        setPage('onboarding');
+      if (!hasSubscription) {
+        setPage('plan-picker');
       } else if (!profile.onboarding_complete) {
         setPage('onboarding');
-      } else if (!hasSubscription) {
-        setPage('plan-picker');
       } else {
         setPage('dashboard');
       }
