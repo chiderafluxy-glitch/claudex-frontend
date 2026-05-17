@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './lib/supabase';
-import { signUp, signIn, signOut, resetPassword, getProfile, createCheckout, openBillingPortal, saveApiKey, getSessions, getUsage, getMetrics, getTraces, streamChat, stopChat } from './lib/api';
+import { signUp, signIn, signOut, resetPassword, getProfile, createCheckout, openBillingPortal, saveApiKey, skipOnboarding, getSessions, getUsage, getMetrics, getTraces, streamChat, stopChat } from './lib/api';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Terminal, 
@@ -1093,6 +1093,18 @@ export default function App() {
 
         {page === 'onboarding' && (
           <motion.div key="onboarding" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+             <div className="absolute top-4 left-4">
+               <button onClick={async () => {
+                 try {
+                   await skipOnboarding();
+                 } catch {}
+                 await signOut();
+                 setUser(null);
+                 setPage('landing');
+               }} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
+                 ← Back to Home
+               </button>
+             </div>
              <AuthLayout logo title="One last thing.">
                 <div className="flex items-center justify-center gap-3 mb-8">
                    {[

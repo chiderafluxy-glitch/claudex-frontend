@@ -53,6 +53,9 @@ export const openBillingPortal = () => apiPost('/api/billing-portal');
 export const saveApiKey = (apiKey: string) =>
   apiPost('/api/apikey', { apiKey });
 
+// Skip onboarding - mark as complete
+export const skipOnboarding = () => apiPost('/api/onboarding/skip');
+
 // Sessions
 export const getSessions = () => apiGet('/api/sessions');
 
