@@ -705,7 +705,7 @@ const DashboardSidebar = ({
 
 const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState<Tab>('chat');
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string, metrics?: any }[]>([
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string, metrics?: any, attachments?: any[] }[]>([
     { role: 'assistant', content: "I've refactored the middleware to use JWT. Here's the updated implementation using the jose library for high-performance signed tokens." }
   ]);
   const [input, setInput] = useState('');
@@ -722,6 +722,10 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
   const [activityEvents, setActivityEvents] = useState<any[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showBugReport, setShowBugReport] = useState(false);
+  const [attachments, setAttachments] = useState<Array<{ name: string; type: 'image' | 'text' | 'file'; content?: string; base64?: string; mimeType: string; preview?: string; size: number }>>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch profile for message count on mount
@@ -810,11 +814,65 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
   }, [messages, isTyping]);
 
   // Real streaming chat
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (attachments.length + files.length > 10) {
+      alert('Maximum 10 files');
+      return;
+    }
+    
+    const newAttachments = await Promise.all(files.map(file => {
+      return new Promise<any>((resolve) => {
+        const reader = new FileReader();
+        const isImage = file.type.startsWith('image/');
+        const isText = /\.(txt|md|js|ts|tsx|jsx|py|json|csv|html|css|yaml|yml|sh|env|xml)$/i.test(file.name);
+        
+        reader.onload = (ev) => {
+          const result = ev.target?.result as string;
+          if (isImage) {
+            const base64 = result.split(',')[1];
+            resolve({ name: file.name, type: 'image', base64, mimeType: file.type, preview: result, size: file.size });
+          } else if (isText) {
+            resolve({ name: file.name, type: 'text', content: result, mimeType: file.type, size: file.size });
+          } else {
+            const base64 = result.split(',')[1];
+            resolve({ name: file.name, type: 'file', base64, mimeType: file.type, size: file.size });
+          }
+        };
+        
+        if (isImage || (!isText && true)) {
+          reader.readAsDataURL(file);
+        } else {
+          reader.readAsText(file);
+        }
+      });
+    }));
+    
+    setAttachments(prev => [...prev, ...newAttachments]);
+    e.target.value = '';
+    setShowAttachMenu(false);
+  };
+  
   const handleSend = async () => {
-    if (!input.trim()) return;
-    const userMsg = input;
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    if (!input.trim() && attachments.length === 0) return;
+    
+    let fullMessage = input.trim();
+    
+    // Prepend text file contents
+    for (const att of attachments) {
+      if (att.type === 'text') {
+        fullMessage = `[Attached: ${att.name}]\n\`\`\`\n${att.content}\n\`\`\`\n\n${fullMessage}`;
+      } else if (att.type === 'image') {
+        fullMessage = `[Attached image: ${att.name}]\n\n${fullMessage}`;
+      } else {
+        fullMessage = `[Attached file: ${att.name} (${att.mimeType})]\n\n${fullMessage}`;
+      }
+    }
+    
+    const userMsg = input.trim() || `Attached ${attachments.length} file(s)`;
+    setMessages(prev => [...prev, { role: 'user', content: userMsg, attachments: [...attachments] }]);
     setInput('');
+    setAttachments([]);
     setIsTyping(true);
     
     try {
@@ -960,6 +1018,18 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
                     <div key={i} className={cn("flex flex-col gap-4", m.role === 'user' ? 'items-end' : 'items-start')}>
                       {m.role === 'user' ? (
                         <div className="max-w-xl bg-cl-accent/10 border border-cl-accent/20 rounded-2xl px-6 py-4 shadow-sm">
+                          {m.attachments && m.attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-3">
+                              {m.attachments.map((att, ai) => (
+                                <div key={ai} className="flex items-center gap-2 px-2 py-1 bg-cl-bg/50 rounded text-[11px]">
+                                  {att.type === 'image' && att.preview && (
+                                    <img src={att.preview} className="w-8 h-8 object-cover rounded" />
+                                  )}
+                                  <span className="text-cl-sub-text">{att.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                           <p className="text-[15px] leading-relaxed">{m.content}</p>
                         </div>
                       ) : (
@@ -1020,6 +1090,32 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
                       ) : null} {user.plan === 'basic' ? `${messageLimit} messages used this month` : null}
                     </div>
                     <div className="bg-cl-surface border border-cl-border group-focus-within:border-cl-accent/50 rounded-xl shadow-2xl flex flex-col p-2 transition-all">
+                      {attachments.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', padding: '8px 8px 0' }}>
+                          {attachments.map((att, i) => (
+                            <div key={i} style={{
+                              display: 'flex', alignItems: 'center', gap: '6px',
+                              background: '#2a2926', border: '1px solid #3a3936',
+                              borderRadius: '6px', padding: '4px 8px', fontSize: '11px', color: '#faf9f5'
+                            }}>
+                              {att.type === 'image' && att.preview
+                                ? <img src={att.preview} style={{ width: '20px', height: '20px', objectFit: 'cover', borderRadius: '3px' }} />
+                                : <span>{att.type === 'text' ? '📄' : '📦'}</span>
+                              }
+                              <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {att.name}
+                              </span>
+                              <span style={{ color: '#6b6a65' }}>
+                                {att.size > 1024 ? `${(att.size / 1024).toFixed(0)}kb` : `${att.size}b`}
+                              </span>
+                              <button
+                                onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                style={{ background: 'none', border: 'none', color: '#6b6a65', cursor: 'pointer', padding: '0 2px', fontSize: '14px' }}
+                              >×</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <textarea 
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -1028,11 +1124,48 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
                         className="w-full bg-transparent border-none focus:ring-0 text-cl-text text-[15px] p-2 min-h-[64px] resize-none scrollbar-hide"
                       />
                       <div className="flex items-center justify-between px-2 pb-1">
-                        <button className="p-2 hover:bg-cl-interactive rounded-md text-cl-muted transition-colors"><Paperclip size={20} /></button>
+                        <div style={{ position: 'relative' }}>
+                          <input type="file" ref={fileInputRef} style={{ display: 'none' }} multiple onChange={handleFileSelect} />
+                          <input type="file" ref={folderInputRef} style={{ display: 'none' }} multiple webkitdirectory="" onChange={handleFileSelect} />
+                          
+                          <button
+                            onClick={() => setShowAttachMenu(prev => !prev)}
+                            className="p-2 hover:bg-cl-interactive rounded-md text-cl-muted transition-colors"
+                          >
+                            <Paperclip size={20} />
+                          </button>
+                          
+                          {showAttachMenu && (
+                            <div style={{
+                              position: 'absolute', bottom: '40px', left: 0,
+                              background: '#1a1917', border: '1px solid #2a2926',
+                              borderRadius: '8px', padding: '4px', minWidth: '140px', zIndex: 50
+                            }}>
+                              <button
+                                onClick={() => fileInputRef.current?.click()}
+                                style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
+                                  fontSize: '13px', color: '#faf9f5', background: 'none', border: 'none', cursor: 'pointer', borderRadius: '6px' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#2a2926')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                              >
+                                📄 Attach files
+                              </button>
+                              <button
+                                onClick={() => folderInputRef.current?.click()}
+                                style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left',
+                                  fontSize: '13px', color: '#faf9f5', background: 'none', border: 'none', cursor: 'pointer', borderRadius: '6px' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#2a2926')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                              >
+                                📁 Attach folder
+                              </button>
+                            </div>
+                          )}
+                        </div>
                         <Button 
                           onClick={handleSend} 
-                          className={cn("px-6 py-1.5 font-bold rounded-lg text-sm transition-all", input.trim() ? "opacity-100" : "opacity-30")}
-                          disabled={!input.trim()}
+                          className={cn("px-6 py-1.5 font-bold rounded-lg text-sm transition-all", input.trim() || attachments.length > 0 ? "opacity-100" : "opacity-30")}
+                          disabled={!input.trim() && attachments.length === 0}
                         >
                           Send
                         </Button>
@@ -1362,12 +1495,11 @@ export default function App() {
     supabase.auth.getSession().then(async ({ data }) => {
       if (data.session) {
         try {
-          const profile = await getProfile();
+          // Try to get profile with timeout
+          const profilePromise = getProfile();
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+          const profile: any = await Promise.race([profilePromise, timeoutPromise]);
           setUser({ email: profile.email, plan: profile.plan });
-          // Check subscription first: if they paid (active/past_due) and onboarding done → dashboard
-          // If they paid but not onboarded → onboarding
-          // If not paid yet → plan-picker
-          // Check if they have a valid subscription
           const hasSubscription = !!profile.subscription_status && (profile.subscription_status === 'active' || profile.subscription_status === 'past_due');
           const isOnboarded = profile.onboarding_complete === true;
           if (!hasSubscription) {
@@ -1377,7 +1509,11 @@ export default function App() {
           } else {
             setPage('dashboard');
           }
-        } catch {}
+        } catch {
+          // Backend slow/down - restore from session anyway
+          setUser({ email: data.session.user.email || '', plan: 'basic' });
+          setPage('dashboard');
+        }
       }
     });
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -1387,7 +1523,10 @@ export default function App() {
       }
       if (event === 'SIGNED_IN' && session) {
         try {
-          const profile = await getProfile();
+          // Try to get profile with timeout
+          const profilePromise = getProfile();
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+          const profile: any = await Promise.race([profilePromise, timeoutPromise]);
           setUser({ email: profile.email, plan: profile.plan });
           const hasSubscription = !!profile.subscription_status && (profile.subscription_status === 'active' || profile.subscription_status === 'past_due');
           const isOnboarded = profile.onboarding_complete === true;
@@ -1398,7 +1537,11 @@ export default function App() {
           } else {
             setPage('dashboard');
           }
-        } catch {}
+        } catch {
+          // Backend slow - restore from session
+          setUser({ email: session.user.email || '', plan: 'basic' });
+          setPage('dashboard');
+        }
       }
     });
     return () => listener.subscription.unsubscribe();
@@ -1427,10 +1570,12 @@ export default function App() {
       // After signup, redirect to Stripe checkout
       if (selectedPlan) {
         try {
-          const { url } = await createCheckout(selectedPlan);
+          const checkoutPromise = createCheckout(selectedPlan);
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+          const { url }: any = await Promise.race([checkoutPromise, timeoutPromise]);
           window.location.href = url;
         } catch {
-          // Stripe not set up yet — go to plan picker
+          // Stripe timeout or not set up — go to plan picker
           setPage('plan-picker');
         }
       } else {
@@ -1447,7 +1592,7 @@ export default function App() {
     setAuthError(null);
     setAuthLoading(true);
     try {
-      const { error } = await signIn(email, password);
+      const { data, error } = await signIn(email, password);
       if (error) { 
         if (error.message.toLowerCase().includes('invalid')) {
           setAuthError('Invalid email or password. Try "Forgot password?" to reset.');
@@ -1456,11 +1601,19 @@ export default function App() {
         }
         return; 
       }
-      const profile = await getProfile();
+      // Try to get profile with timeout
+      let profile: any = null;
+      try {
+        const profilePromise = getProfile();
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+        profile = await Promise.race([profilePromise, timeoutPromise]);
+      } catch {
+        // Profile fetch failed - use session data
+        setUser({ email: data.user?.email || email, plan: 'basic' });
+        setPage('dashboard');
+        return;
+      }
       setUser({ email: profile.email, plan: profile.plan });
-      // Check subscription first: if they paid (active/past_due) and onboarding done → dashboard
-      // If they paid but not onboarded → onboarding
-      // If not paid yet → plan-picker
       const hasSubscription = !!profile.subscription_status && (profile.subscription_status === 'active' || profile.subscription_status === 'past_due');
       const isOnboarded = profile.onboarding_complete === true;
       if (!hasSubscription) {
