@@ -946,6 +946,21 @@ export default function App() {
         setUser(null);
         setPage('landing');
       }
+      if (event === 'SIGNED_IN' && session) {
+        try {
+          const profile = await getProfile();
+          setUser({ email: profile.email, plan: profile.plan });
+          const hasSubscription = !!profile.subscription_status && (profile.subscription_status === 'active' || profile.subscription_status === 'past_due');
+          const isOnboarded = profile.onboarding_complete === true;
+          if (!hasSubscription) {
+            setPage('plan-picker');
+          } else if (!isOnboarded) {
+            setPage('onboarding');
+          } else {
+            setPage('dashboard');
+          }
+        } catch {}
+      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
