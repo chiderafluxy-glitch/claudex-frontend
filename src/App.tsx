@@ -633,7 +633,8 @@ const DashboardSidebar = ({
   onNewChat,
   onSessionClick,
   onShowSettings,
-  onReportBug
+  onReportBug,
+  onRenameSession
 }: { 
   email: string; 
   plan: Plan; 
@@ -644,7 +645,25 @@ const DashboardSidebar = ({
   onSessionClick?: (id: string) => void;
   onShowSettings?: () => void;
   onReportBug?: () => void;
-}) => (
+  onRenameSession?: (id: string, title: string) => void;
+}) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  
+  const startEdit = (s: {id: string, title: string}, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(s.id);
+    setEditTitle(s.title);
+  };
+  
+  const saveEdit = () => {
+    if (editingId && editTitle.trim()) {
+      onRenameSession?.(editingId, editTitle.trim());
+    }
+    setEditingId(null);
+  };
+  
+  return (
   <aside className="w-64 bg-cl-surface border-r border-cl-border flex flex-col shrink-0">
     <div className="p-6 flex items-center">
       <span className="text-xl font-bold tracking-tight text-cl-text">Claudex</span>
@@ -664,11 +683,33 @@ const DashboardSidebar = ({
         sessions.map((s) => (
           <div 
             key={s.id} 
-            className="p-2 rounded-md text-sm border-l-2 transition-all cursor-pointer border-transparent text-cl-sub-text hover:bg-cl-interactive hover:text-cl-text"
+            className="p-2 rounded-md text-sm border-l-2 transition-all cursor-pointer border-transparent text-cl-sub-text hover:bg-cl-interactive hover:text-cl-text group"
             onClick={() => onSessionClick?.(s.id)}
           >
-            <div className="truncate font-medium">{s.title}</div>
-            <div className="text-[10px] text-cl-muted mt-0.5">{new Date(s.created_at).toLocaleDateString()}</div>
+            {editingId === s.id ? (
+              <input
+                autoFocus
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && saveEdit()}
+                onBlur={saveEdit}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full bg-cl-bg border border-cl-accent rounded px-1 text-sm"
+              />
+            ) : (
+              <>
+                <div className="truncate font-medium flex items-center">
+                  {s.title}
+                  <button 
+                    onClick={(e) => startEdit(s, e)}
+                    className="ml-auto opacity-0 group-hover:opacity-100 text-cl-muted hover:text-cl-text text-xs px-1"
+                  >
+                    ✏️
+                  </button>
+                </div>
+                <div className="text-[10px] text-cl-muted mt-0.5">{new Date(s.created_at).toLocaleDateString()}</div>
+              </>
+            )}
           </div>
         ))
       )}
@@ -933,10 +974,22 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
   const startNewChat = () => {
     setActiveSessionId(null);
     setMessages([]);
+    // Refresh sessions to show new chat will appear
+    getSessions().then(s => setSessions(s.sessions || [])).catch(console.error);
   };
 
   const handleSessionClick = (sessionId: string) => {
     setActiveSessionId(sessionId);
+    // Load session messages - this would need a new API endpoint
+  };
+  
+  const handleRenameSession = async (sessionId: string, newTitle: string) => {
+    try {
+      await apiPost('/api/sessions/rename', { session_id: sessionId, title: newTitle });
+      setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s));
+    } catch (e) {
+      console.error('Failed to rename session:', e);
+    }
   };
 
   // Model selection based on plan
@@ -954,7 +1007,7 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
 
   return (
     <div className="h-screen flex bg-cl-bg overflow-hidden text-[#faf9f5]">
-      <DashboardSidebar email={user.email} plan={user.plan} onLogout={onLogout} onNavigate={() => {}} sessions={sessions} onNewChat={startNewChat} onSessionClick={handleSessionClick} onShowSettings={() => setShowSettings(true)} onReportBug={() => setShowBugReport(true)} />
+      <DashboardSidebar email={user.email} plan={user.plan} onLogout={onLogout} onNavigate={() => {}} sessions={sessions} onNewChat={startNewChat} onSessionClick={handleSessionClick} onShowSettings={() => setShowSettings(true)} onReportBug={() => setShowBugReport(true)} onRenameSession={handleRenameSession} />
       
       <main className="flex-1 flex flex-col relative min-w-0">
         {/* HEADER / TAB BAR */}
@@ -1176,47 +1229,36 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
               </motion.div>
             )}
             
-            {activeTab === 'usage' && <motion.div key="usage" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-8 h-full overflow-y-auto overflow-x-hidden"><UsageTabContent /></motion.div>}
+            {activeTab === 'usage' && <motion.div key="usage" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-8 h-full overflow-y-auto overflow-x-hidden"><UsageTabContent data={usageData} messageCount={messageCount} /></motion.div>}
 
             {activeTab === 'metrics' && (
               <motion.div key="metrics" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-8 space-y-8 overflow-y-auto h-full overflow-x-hidden">
                 <div className="grid md:grid-cols-2 gap-6">
-                  {['Memory Usage', 'CPU Utilization', 'Event Loop Lag', 'Active Sessions'].map((m) => (
-                    <Card key={m} className="h-64 flex flex-col">
+                  {[
+                    { key: 'memory', label: 'Memory Usage', value: metricsData?.memory || 0, unit: 'MB' },
+                    { key: 'cpu', label: 'CPU Utilization', value: metricsData?.cpu || 0, unit: '%' },
+                    { key: 'lag', label: 'Event Loop Lag', value: metricsData?.lag || 0, unit: 'ms' },
+                    { key: 'sessions', label: 'Active Sessions', value: metricsData?.sessions || sessions.length, unit: '' },
+                  ].map((m) => (
+                    <Card key={m.key} className="h-64 flex flex-col">
                       <div className="flex items-center justify-between mb-4">
-                        <span className="text-sm font-bold opacity-60 uppercase tracking-widest">{m}</span>
+                        <span className="text-sm font-bold opacity-60 uppercase tracking-widest">{m.label}</span>
                         <div className="text-xs font-mono bg-cl-bg px-2 py-1 rounded border border-cl-border">LIVE</div>
                       </div>
-                      <div className="flex-grow">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={METRIC_DATA}>
-                            <defs>
-                              <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#d97757" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#d97757" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <Area type="monotone" dataKey="value" stroke="#d97757" fillOpacity={1} fill="url(#colorVal)" />
-                          </AreaChart>
-                        </ResponsiveContainer>
+                      <div className="flex-grow flex items-center justify-center">
+                        {m.value ? (
+                          <div className="text-5xl font-bold text-cl-accent">{m.value}<span className="text-xl text-cl-muted">{m.unit}</span></div>
+                        ) : (
+                          <div className="text-cl-muted text-sm">No data yet</div>
+                        )}
                       </div>
-                      <div className="flex items-center justify-between mt-4 text-xs font-mono text-cl-muted">
+                      <div className="flex items-center justify-between mt-4 text-xs font-mono text-cl-muted"><Buffer size={12} /> Buffer: {m.value ? (m.value * 0.8).toFixed(1) : 0}{m.unit}</div>
                          <span>AVG: 56%</span>
                          <span>MAX: 82%</span>
                          <span>MIN: 34%</span>
                       </div>
                     </Card>
                   ))}
-                </div>
-                
-                <div className="mt-8">
-                  <div className="flex items-center gap-3 mb-4 p-4 rounded-xl border border-red-500/30 bg-red-500/5">
-                    <AlertTriangle className="text-red-500" />
-                    <div>
-                      <div className="text-sm font-bold uppercase text-red-500">Alert Detected</div>
-                      <div className="text-xs text-cl-muted">CPU usage is consistently above 80% for the last 5 minutes.</div>
-                    </div>
-                  </div>
                 </div>
               </motion.div>
             )}
@@ -1233,7 +1275,10 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
                   </div>
                   
                   {activityEvents.length === 0 ? (
-                    <div className="text-center text-cl-muted py-8">Connecting to activity feed...</div>
+                    <div className="text-center text-cl-muted py-8">
+                      <Activity className="inline-block mb-2 animate-pulse" size={24} />
+                      <div>Ready for your first message</div>
+                    </div>
                   ) : (
                     activityEvents.map((e, i) => {
                       const IconComp = e.icon || Activity;
@@ -1297,22 +1342,29 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
 };
 
 // Helper for Usage Tab to maintain consistency
-const UsageTabContent = () => (
-  <div className="space-y-8 max-w-5xl mx-auto">
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {[
-        { label: "Today's Cost", value: '$0.43', detail: '14,200 tokens' },
-        { label: "Today's Requests", value: '28', detail: '3.2s avg' },
-        { label: "Total Sessions", value: '142', detail: '30% growth' },
-        { label: "Credits Rem.", value: '$12.40', detail: 'Auto-refill OFF' },
-      ].map((stat, i) => (
-        <Card key={i} className="bg-cl-surface/50 border-cl-border/50">
-          <div className="text-[10px] text-cl-muted uppercase font-bold tracking-widest mb-1">{stat.label}</div>
-          <div className="text-2xl font-bold mb-1 tracking-tight">{stat.value}</div>
-          <div className="text-[10px] text-cl-accent font-mono">{stat.detail}</div>
-        </Card>
-      ))}
-    </div>
+const UsageTabContent = ({ data, messageCount }: { data?: any, messageCount?: number }) => {
+  const stats = data || {
+    today_cost: 0,
+    today_requests: 0,
+    total_sessions: 0,
+    credits_remaining: 0
+  };
+  return (
+    <div className="space-y-8 max-w-5xl mx-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "Today's Cost", value: `$${stats.today_cost?.toFixed(2) || '0.00'}`, detail: `${(stats.today_tokens || 0).toLocaleString()} tokens` },
+          { label: "Today's Requests", value: stats.today_requests || '0', detail: `${stats.avg_latency || '0'}s avg` },
+          { label: "Total Sessions", value: stats.total_sessions || '0', detail: `${stats.growth || '0%} growth` },
+          { label: "Credits Rem.", value: `$${stats.credits_remaining?.toFixed(2) || '0.00'}`, detail: stats.auto_refill ? 'Auto-refill ON' : 'Auto-refill OFF' },
+        ].map((stat, i) => (
+          <Card key={i} className="bg-cl-surface/50 border-cl-border/50">
+            <div className="text-[10px] text-cl-muted uppercase font-bold tracking-widest mb-1">{stat.label}</div>
+            <div className="text-2xl font-bold mb-1 tracking-tight">{stat.value}</div>
+            <div className="text-[10px] text-cl-accent font-mono">{stat.detail}</div>
+          </Card>
+        ))}
+      </div>
     
     <Card title="Engagement Metrics">
       <div className="h-[300px]">
