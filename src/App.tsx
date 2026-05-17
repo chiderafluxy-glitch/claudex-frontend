@@ -1028,6 +1028,11 @@ export default function App() {
 
         {page === 'signup' && (
           <motion.div key="signup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="absolute top-4 left-4">
+              <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
+                ← Back to Home
+              </button>
+            </div>
             <AuthLayout 
               title="Create your account"
               children={
@@ -1046,6 +1051,11 @@ export default function App() {
 
         {page === 'login' && (
           <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="absolute top-4 left-4">
+              <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
+                ← Back to Home
+              </button>
+            </div>
             <AuthLayout 
               title="Welcome back"
               children={
@@ -1062,6 +1072,11 @@ export default function App() {
 
         {page === 'plan-picker' && (
           <motion.div key="plans" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="absolute top-4 left-4">
+              <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
+                ← Back to Home
+              </button>
+            </div>
              <div className="min-h-screen bg-cl-bg pt-20 px-6">
                 <h2 className="text-4xl font-bold text-center mb-12">Choose your plan</h2>
                 <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-8">
