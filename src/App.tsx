@@ -947,7 +947,15 @@ export default function App() {
     setAuthLoading(true);
     try {
       const { error } = await signUp(email, password);
-      if (error) { setAuthError(error.message); return; }
+      if (error) { 
+        // If user already registered, suggest login
+        if (error.message.toLowerCase().includes('already')) {
+          setAuthError('Account exists. Try logging in instead.');
+        } else {
+          setAuthError(error.message);
+        }
+        return; 
+      }
       // After signup, redirect to Stripe checkout
       if (selectedPlan) {
         try {
@@ -972,7 +980,14 @@ export default function App() {
     setAuthLoading(true);
     try {
       const { error } = await signIn(email, password);
-      if (error) { setAuthError(error.message); return; }
+      if (error) { 
+        if (error.message.toLowerCase().includes('invalid')) {
+          setAuthError('Invalid email or password');
+        } else {
+          setAuthError(error.message);
+        }
+        return; 
+      }
       const profile = await getProfile();
       setUser({ email: profile.email, plan: profile.plan });
       // Check if they have active subscription
