@@ -856,7 +856,13 @@ const LoginForm = ({ onSubmit, onSignup, error, loading }: {
       <Input label="Email address" type="text" placeholder="you@example.com" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
       <div className="relative">
         <Input label="Password" type="password" placeholder="••••••••" value={password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} />
-        <button className="absolute top-0 right-0 text-[10px] font-bold text-cl-accent hover:underline uppercase tracking-widest">Forgot password?</button>
+        <button onClick={async () => {
+          if (!email) return;
+          setAuthLoading(true);
+          await resetPassword(email);
+          setAuthError('✓ Check your email for reset link');
+          setAuthLoading(false);
+        }} className="absolute top-0 right-0 text-[10px] font-bold text-cl-accent hover:underline uppercase tracking-widest">Forgot password?</button>
       </div>
       <Button className="w-full py-3 mt-4" onClick={() => onSubmit(email, password)} disabled={loading}>{loading ? 'Logging in...' : 'Log In'}</Button>
       <p className="mt-6 text-center text-sm text-cl-muted">
@@ -986,7 +992,7 @@ export default function App() {
       const { error } = await signIn(email, password);
       if (error) { 
         if (error.message.toLowerCase().includes('invalid')) {
-          setAuthError('Invalid email or password');
+          setAuthError('Invalid email or password. Try "Forgot password?" to reset.');
         } else {
           setAuthError(error.message);
         }
