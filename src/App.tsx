@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './lib/supabase';
-import { signUp, signIn, signOut, resetPassword, getProfile, createCheckout, openBillingPortal, saveApiKey, skipOnboarding, getSessions, getUsage, getMetrics, getTraces, streamChat, stopChat } from './lib/api';
+import { signUp, signIn, signOut, resetPassword, getProfile, createCheckout, openBillingPortal, saveApiKey, apiPost, skipOnboarding, getSessions, getUsage, getMetrics, getTraces, streamChat, stopChat } from './lib/api';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Terminal, 
@@ -384,29 +384,123 @@ const Input = ({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> 
     </div>
   </div>
 );
+// --- Dashboard Sub-Views ---
+
+// Bug Report Modal
+const BugReportModal = ({ userEmail, onClose }: { userEmail: string, onClose: () => void }) => {
+  const [message, setMessage] = useState('');
+  const [email, setEmail] = useState(userEmail);
+  const [sending, setSending] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    if (!message.trim()) return;
+    setSending(true);
+    setError(null);
+    
+    try {
+      const res = await fetch('https://formspree.io/f/xwpkqrjb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          message,
+          page: 'claudex-dashboard',
+          timestamp: new Date().toISOString()
+        })
+      });
+      
+      if (res.ok) {
+        setSuccess(true);
+        setTimeout(onClose, 2000);
+      } else {
+        setError('Failed to send. Please email us directly.');
+      }
+    } catch (e) {
+      setError('Failed to send. Please email us directly.');
+    }
+    setSending(false);
+  };
+
+  // Close on Escape
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative bg-cl-surface border border-cl-border rounded-xl w-full max-w-md p-6 shadow-2xl">
+        <h2 className="text-lg font-bold mb-4">Report a Bug</h2>
+        
+        {success ? (
+          <div className="text-green-500 py-8 text-center">Bug reported! We'll look into it.</div>
+        ) : (
+          <>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-cl-muted uppercase tracking-widest">Your email</label>
+                <Input value={email} onChange={(e: any) => setEmail(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <label className="text-xs text-cl-muted uppercase tracking-widest">What went wrong?</label>
+                <textarea 
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Describe the issue you're experiencing..."
+                  className="w-full mt-1 bg-cl-bg border border-cl-border rounded-lg px-3 py-2 text-sm min-h-[120px] resize-none"
+                />
+              </div>
+              {error && <div className="text-red-400 text-sm">{error}</div>}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+              <Button onClick={handleSubmit} disabled={sending || !message.trim()} className="flex-1">
+                {sending ? 'Sending...' : 'Send Report'}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // --- Dashboard Sub-Views ---
 
 const SettingsPanel = ({ user, onClose, onLogout }: { user: { email: string, plan: Plan }, onClose: () => void, onLogout: () => void }) => {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [apiKeyHint, setApiKeyHint] = useState('');
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string>('');
   const [savingKey, setSavingKey] = useState(false);
   const [keyMessage, setKeyMessage] = useState<string | null>(null);
+  const [manageBillingLoading, setManageBillingLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [deleting, setDeleting] = useState(false);
   
-  // Load profile to get API key hint
+  // Load profile to get API key hint and subscription status
   useEffect(() => {
     getProfile().then(p => {
       setApiKeyHint(p.key_hint || '');
+      setSubscriptionStatus(p.subscription_status || 'inactive');
     }).catch(console.error);
   }, []);
   
   const handleSaveApiKey = async () => {
     if (!apiKeyInput.trim()) return;
+    if (!apiKeyInput.startsWith('sk-ant-')) {
+      setKeyMessage('Invalid key format');
+      return;
+    }
     setSavingKey(true);
     setKeyMessage(null);
     try {
       await saveApiKey(apiKeyInput);
-      setKeyMessage('✓ API key updated');
+      setKeyMessage('✓ Key updated successfully');
       setApiKeyHint(apiKeyInput.slice(-4));
       setApiKeyInput('');
     } catch (e: any) {
@@ -416,11 +510,25 @@ const SettingsPanel = ({ user, onClose, onLogout }: { user: { email: string, pla
   };
   
   const handleManageSubscription = async () => {
+    setManageBillingLoading(true);
     try {
       const { url } = await openBillingPortal();
       window.location.href = url;
     } catch (e) {
       console.error('Failed to open billing:', e);
+      setManageBillingLoading(false);
+    }
+  };
+  
+  const handleDeleteAccount = async () => {
+    if (deleteInput !== 'DELETE') return;
+    setDeleting(true);
+    try {
+      await apiPost('/api/account/delete');
+      onLogout();
+    } catch (e) {
+      console.error('Failed to delete account:', e);
+      setDeleting(false);
     }
   };
   
@@ -431,44 +539,86 @@ const SettingsPanel = ({ user, onClose, onLogout }: { user: { email: string, pla
         <button onClick={onClose} className="p-2 hover:bg-cl-interactive rounded"><X size={20} /></button>
       </div>
       
-      {/* API Key Section */}
+      {/* Section 1: Account */}
+      <div className="space-y-3">
+        <div className="text-sm font-bold uppercase tracking-widest text-cl-muted">Account</div>
+        <div className="text-xs text-cl-muted">{user.email}</div>
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            "text-[9px] px-1.5 rounded-full uppercase font-bold py-0.5",
+            user.plan === 'pro' ? 'bg-cl-accent text-white' : 'bg-cl-muted/20 text-cl-muted'
+          )}>
+            {user.plan}
+          </span>
+          <span className="text-[9px] text-cl-muted uppercase">({subscriptionStatus})</span>
+        </div>
+      </div>
+      
+      {/* Section 2: API Key */}
       <div className="space-y-3">
         <div className="text-sm font-bold uppercase tracking-widest text-cl-muted">API Key</div>
         <div className="text-xs text-cl-muted">
-          Current key: ****{apiKeyHint}
+          Current key: sk-ant-...{apiKeyHint}
         </div>
         <input 
           type="password" 
           value={apiKeyInput}
           onChange={(e) => setApiKeyInput(e.target.value)}
-          placeholder="Enter new API key"
+          placeholder="Enter new API key (starts with sk-ant-)"
           className="w-full bg-cl-bg border border-cl-border rounded px-3 py-2 text-sm"
         />
         <Button onClick={handleSaveApiKey} disabled={!apiKeyInput.trim() || savingKey} className="w-full">
-          {savingKey ? 'Saving...' : 'Update Key'}
+          {savingKey ? 'Saving...' : 'Save Key'}
         </Button>
         {keyMessage && (
           <div className={`text-xs ${keyMessage.includes('✓') ? 'text-green-500' : 'text-red-400'}`}>{keyMessage}</div>
         )}
       </div>
       
-      {/* Plan Section */}
+      {/* Section 3: Plan */}
       <div className="space-y-3">
         <div className="text-sm font-bold uppercase tracking-widest text-cl-muted">Plan</div>
         <div className="flex items-center justify-between p-3 bg-cl-bg rounded border border-cl-border">
           <span className="font-medium capitalize">{user.plan}</span>
-          <span className="text-sm text-cl-muted">{user.plan === 'pro' ? '$30/mo' : 'Free'}</span>
+          <span className="text-sm text-cl-muted">{user.plan === 'pro' ? '$15/mo' : '$7/mo'}</span>
         </div>
-        <Button onClick={handleManageSubscription} variant="secondary" className="w-full">
-          Manage Subscription
+        <Button onClick={handleManageSubscription} disabled={manageBillingLoading} variant="secondary" className="w-full">
+          {manageBillingLoading ? 'Opening billing portal...' : 'Change Plan / Manage Billing'}
         </Button>
       </div>
       
-      {/* Logout Section */}
-      <div className="pt-6 border-t border-cl-border">
+      {/* Section 4: Sign Out */}
+      <div className="pt-4 border-t border-cl-border">
         <Button onClick={onLogout} variant="danger" className="w-full">
-          <LogOut size={16} /> Log Out
+          <LogOut size={16} /> Sign Out
         </Button>
+      </div>
+      
+      {/* Section 5: Danger Zone */}
+      <div className="pt-4 border-t border-cl-border">
+        {!showDeleteConfirm ? (
+          <Button onClick={() => setShowDeleteConfirm(true)} variant="danger" className="w-full">
+            Delete Account
+          </Button>
+        ) : (
+          <div className="space-y-3 p-4 bg-red-900/20 border border-red-800/40 rounded-lg">
+            <div className="text-sm text-red-400 font-bold">Are you sure? This will permanently delete your account and all data.</div>
+            <div className="text-xs text-cl-muted">Type DELETE to confirm</div>
+            <input 
+              type="text" 
+              value={deleteInput}
+              onChange={(e) => setDeleteInput(e.target.value)}
+              placeholder="Type DELETE"
+              className="w-full bg-cl-bg border border-red-800/40 rounded px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <Button onClick={() => setShowDeleteConfirm(false)} variant="secondary" className="flex-1">Cancel</Button>
+              <Button onClick={handleDeleteAccount} disabled={deleteInput !== 'DELETE' || deleting} variant="danger" className="flex-1">
+                {deleting ? 'Deleting...' : 'Permanently Delete'}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -482,7 +632,8 @@ const DashboardSidebar = ({
   sessions = [],
   onNewChat,
   onSessionClick,
-  onShowSettings
+  onShowSettings,
+  onReportBug
 }: { 
   email: string; 
   plan: Plan; 
@@ -492,6 +643,7 @@ const DashboardSidebar = ({
   onNewChat?: () => void;
   onSessionClick?: (id: string) => void;
   onShowSettings?: () => void;
+  onReportBug?: () => void;
 }) => (
   <aside className="w-64 bg-cl-surface border-r border-cl-border flex flex-col shrink-0">
     <div className="p-6 flex items-center">
@@ -525,7 +677,7 @@ const DashboardSidebar = ({
     <div className="p-4 mt-auto border-t border-cl-border">
       <button 
         className="w-full py-2 mb-4 text-[11px] font-bold text-cl-accent bg-cl-accent/10 rounded border border-cl-accent/20 hover:bg-cl-accent/20 transition-colors flex items-center justify-center gap-2 uppercase tracking-tight"
-        onClick={() => alert('Bug reported!')}
+        onClick={onReportBug}
       >
         <AlertTriangle size={12} /> Report Bug
       </button>
@@ -569,6 +721,7 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
   const [tracesData, setTracesData] = useState<any[]>([]);
   const [activityEvents, setActivityEvents] = useState<any[]>([]);
   const [showSettings, setShowSettings] = useState(false);
+  const [showBugReport, setShowBugReport] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch profile for message count on mount
@@ -743,7 +896,7 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
 
   return (
     <div className="h-screen flex bg-cl-bg overflow-hidden text-[#faf9f5]">
-      <DashboardSidebar email={user.email} plan={user.plan} onLogout={onLogout} onNavigate={() => {}} sessions={sessions} onNewChat={startNewChat} onSessionClick={handleSessionClick} onShowSettings={() => setShowSettings(true)} />
+      <DashboardSidebar email={user.email} plan={user.plan} onLogout={onLogout} onNavigate={() => {}} sessions={sessions} onNewChat={startNewChat} onSessionClick={handleSessionClick} onShowSettings={() => setShowSettings(true)} onReportBug={() => setShowBugReport(true)} />
       
       <main className="flex-1 flex flex-col relative min-w-0">
         {/* HEADER / TAB BAR */}
@@ -1002,6 +1155,9 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
             </motion.div>
           </div>
         )}
+
+        {/* Bug Report Modal */}
+        {showBugReport && <BugReportModal userEmail={user.email} onClose={() => setShowBugReport(false)} />}
       </main>
     </div>
   );
