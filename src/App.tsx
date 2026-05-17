@@ -899,6 +899,18 @@ export default function App() {
 
   // Restore session on load
   useEffect(() => {
+    // Check for canceled checkout in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('canceled') === 'true') {
+      // Clean up URL and go to plan picker
+      window.history.replaceState({}, '', '/signup');
+      setPage('plan-picker');
+    }
+    if (params.get('session_id')) {
+      // Checkout successful - wait for webhook to update profile, then go to onboarding
+      window.history.replaceState({}, '', '/onboarding');
+    }
+
     supabase.auth.getSession().then(async ({ data }) => {
       if (data.session) {
         try {
