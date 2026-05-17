@@ -467,28 +467,138 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<'haiku' | 'sonnet' | 'opus'>('sonnet');
+  const [streamingRequestId, setStreamingRequestId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<{id: string, title: string, created_at: string}[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [messageCount, setMessageCount] = useState(0);
+  const [messageLimit, setMessageLimit] = useState(500);
+  const [usageData, setUsageData] = useState<any>(null);
+  const [metricsData, setMetricsData] = useState<any>(null);
+  const [tracesData, setTracesData] = useState<any[]>([]);
+  const [activityEvents, setActivityEvents] = useState<any[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch profile for message count on mount
+  useEffect(() => {
+    getProfile().then(p => {
+      setMessageCount(p.message_count || 0);
+      setMessageLimit(p.message_limit || 500);
+    }).catch(console.error);
+  }, []);
+
+  // Fetch sessions on mount
+  useEffect(() => {
+    getSessions().then(s => {
+      setSessions(s.sessions || []);
+    }).catch(console.error);
+  }, []);
+
+  // Fetch usage data when usage tab is opened
+  useEffect(() => {
+    if (activeTab === 'usage') {
+      getUsage().then(d => setUsageData(d)).catch(console.error);
+    }
+  }, [activeTab]);
+
+  // Fetch metrics every 30 seconds when metrics tab is open
+  useEffect(() => {
+    if (activeTab !== 'metrics') return;
+    getMetrics().then(d => setMetricsData(d)).catch(console.error);
+    const interval = setInterval(() => {
+      getMetrics().then(d => setMetricsData(d)).catch(console.error);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
+
+  // Fetch traces when traces tab is opened
+  useEffect(() => {
+    if (activeTab === 'traces') {
+      getTraces().then(t => setTracesData(t.traces || [])).catch(console.error);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = () => {
+  // Real streaming chat
+  const handleSend = async () => {
     if (!input.trim()) return;
     const userMsg = input;
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setInput('');
     setIsTyping(true);
     
-    setTimeout(() => {
-      setIsTyping(false);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `Refactored auth for project... Switched sessions to JWT successfully.`,
-        metrics: { tokens: '4,128 in / 512 out', cost: '$0.0084', model: 'Sonnet 3.5', duration: '1.8s' }
-      }]);
-    }, 1500);
+    try {
+      const stream = await streamChat(userMsg, activeSessionId, selectedModel);
+      const reader = stream.body?.getReader();
+      if (!reader) throw new Error('No stream');
+      
+      let assistantContent = '';
+      let requestId = '';
+      
+      // Add empty assistant message
+      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const text = new TextDecoder().decode(value);
+        const lines = text.split('\n');
+        
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            
+            if (data.requestId && !requestId) {
+              requestId = data.requestId;
+              setStreamingRequestId(requestId);
+            }
+            
+            if (data.content) {
+              assistantContent += data.content;
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1].content = assistantContent;
+                return updated;
+              });
+            }
+          } catch {}
+        }
+      }
+      
+      setStreamingRequestId(null);
+    } catch (e) {
+      console.error('Stream error:', e);
+    }
+    
+    setIsTyping(false);
   };
+
+  const handleStopStreaming = async () => {
+    if (streamingRequestId) {
+      await stopChat(streamingRequestId);
+      setStreamingRequestId(null);
+    }
+  };
+
+  const startNewChat = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+  };
+
+  const handleSessionClick = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+  };
+
+  // Model selection based on plan
+  const availableModels = user.plan === 'pro' 
+    ? ['haiku', 'sonnet', 'opus'] as const
+    : ['haiku'] as const;
 
   const tabs: { id: Tab, label: string }[] = [
     { id: 'chat', label: 'Chat' },
@@ -546,7 +656,7 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
               <option>Effort: High</option>
             </select>
           </div>
-          {isTyping && <Button variant="danger" size="sm" className="h-7"><Square size={12} className="fill-current" /> Stop</Button>}
+          {streamingRequestId && <Button variant="danger" size="sm" className="h-7" onClick={handleStopStreaming}><Square size={12} className="fill-current" /> Stop</Button>}
         </div>
 
         {/* Content Area */}
@@ -619,7 +729,9 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
                 <div className="p-6 shrink-0">
                   <div className="max-w-4xl mx-auto relative group">
                     <div className="absolute -top-6 left-2 text-[10px] text-cl-muted font-bold uppercase tracking-wide">
-                      <span className="text-cl-accent">312</span> / 500 messages used this month
+                      {user.plan === 'basic' ? (
+                        <span className="text-cl-accent">{messageCount}</span>
+                      ) : null} {user.plan === 'basic' ? `${messageLimit} messages used this month` : null}
                     </div>
                     <div className="bg-cl-surface border border-cl-border group-focus-within:border-cl-accent/50 rounded-xl shadow-2xl flex flex-col p-2 transition-all">
                       <textarea 
@@ -848,6 +960,25 @@ const LoginForm = ({ onSubmit, onSignup, error, loading }: {
 }) => {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [forgotLoading, setForgotLoading] = React.useState(false);
+  const [forgotMessage, setForgotMessage] = React.useState<string | null>(null);
+  
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setForgotMessage('Enter your email first');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotMessage(null);
+    try {
+      await resetPassword(email);
+      setForgotMessage('✓ Check your email for a reset link');
+    } catch (e: any) {
+      setForgotMessage(e.message || 'Failed to send reset email');
+    }
+    setForgotLoading(false);
+  };
+  
   return (
     <>
       {error && (
@@ -855,13 +986,12 @@ const LoginForm = ({ onSubmit, onSignup, error, loading }: {
       )}
       <Input label="Email address" type="text" placeholder="you@example.com" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
       <Input label="Password" type="password" placeholder="••••••••" value={password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} />
-      <button type="button" onClick={async () => {
-        if (!email) return;
-        setAuthLoading(true);
-        await resetPassword(email);
-        setAuthError('✓ Check your email for reset link');
-        setAuthLoading(false);
-      }} className="text-xs font-bold text-cl-accent hover:underline uppercase tracking-widest ml-auto block mt-1">Forgot password?</button>
+      <button type="button" onClick={handleForgotPassword} className="text-xs font-bold text-cl-accent hover:underline uppercase tracking-widest ml-auto block mt-1" disabled={forgotLoading}>
+        Forgot password?
+      </button>
+      {forgotMessage && (
+        <div className={`text-xs mt-2 ${forgotMessage.includes('✓') ? 'text-green-500' : 'text-red-400'}`}>{forgotMessage}</div>
+      )}
       <Button className="w-full py-3 mt-4" onClick={() => onSubmit(email, password)} disabled={loading}>{loading ? 'Logging in...' : 'Log In'}</Button>
       <p className="mt-6 text-center text-sm text-cl-muted">
         Don't have an account? <button onClick={onSignup} className="text-cl-accent hover:underline font-semibold">Sign up</button>
