@@ -899,19 +899,23 @@ export default function App() {
 
   // Restore session on load
   useEffect(() => {
-    // Check for canceled checkout in URL
     const params = new URLSearchParams(window.location.search);
-    if (params.get('canceled') === 'true') {
-      // Clean up URL and go to landing
-      window.history.replaceState({}, '', '/');
-      setPage('landing');
-    }
+    
+    // Handle successful checkout FIRST before any auth checks
     if (params.get('session_id')) {
-      // Checkout successful - go to onboarding
       window.history.replaceState({}, '', '/onboarding');
       setPage('onboarding');
+      return; // Don't run rest - user just completed checkout
     }
-
+    
+    // Handle canceled checkout
+    if (params.get('canceled') === 'true') {
+      window.history.replaceState({}, '', '/');
+      setPage('landing');
+      return;
+    }
+    
+    // Check for existing session
     supabase.auth.getSession().then(async ({ data }) => {
       if (data.session) {
         try {
