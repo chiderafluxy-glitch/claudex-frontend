@@ -902,9 +902,9 @@ export default function App() {
     // Check for canceled checkout in URL
     const params = new URLSearchParams(window.location.search);
     if (params.get('canceled') === 'true') {
-      // Clean up URL and go to plan picker
-      window.history.replaceState({}, '', '/signup');
-      setPage('plan-picker');
+      // Clean up URL and go to landing
+      window.history.replaceState({}, '', '/');
+      setPage('landing');
     }
     if (params.get('session_id')) {
       // Checkout successful - wait for webhook to update profile, then go to onboarding
