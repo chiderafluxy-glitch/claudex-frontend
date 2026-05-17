@@ -855,13 +855,13 @@ const LoginForm = ({ onSubmit, onSignup, error, loading }: {
       )}
       <Input label="Email address" type="text" placeholder="you@example.com" value={email} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)} />
       <Input label="Password" type="password" placeholder="••••••••" value={password} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)} />
-      <button onClick={async () => {
+      <button type="button" onClick={async () => {
         if (!email) return;
         setAuthLoading(true);
         await resetPassword(email);
         setAuthError('✓ Check your email for reset link');
         setAuthLoading(false);
-      }} className="text-xs font-bold text-cl-accent hover:underline uppercase tracking-widest ml-auto">Forgot password?</button>
+      }} className="text-xs font-bold text-cl-accent hover:underline uppercase tracking-widest ml-auto block mt-1">Forgot password?</button>
       <Button className="w-full py-3 mt-4" onClick={() => onSubmit(email, password)} disabled={loading}>{loading ? 'Logging in...' : 'Log In'}</Button>
       <p className="mt-6 text-center text-sm text-cl-muted">
         Don't have an account? <button onClick={onSignup} className="text-cl-accent hover:underline font-semibold">Sign up</button>
@@ -925,10 +925,15 @@ export default function App() {
         try {
           const profile = await getProfile();
           setUser({ email: profile.email, plan: profile.plan });
-          if (!profile.subscription_status || (profile.subscription_status !== 'active' && profile.subscription_status !== 'past_due')) {
-            setPage('plan-picker');
-          } else if (!profile.onboarding_complete) {
+          // Priority: if not onboarded yet, go to onboarding (even if subscription check hasn't updated)
+          // Only go to plan-picker if they never had a subscription
+          const hasSubscription = profile.subscription_status === 'active' || profile.subscription_status === 'past_due';
+          if (!profile.onboarding_complete && hasSubscription) {
             setPage('onboarding');
+          } else if (!profile.onboarding_complete) {
+            setPage('onboarding'); // Still go to onboarding if no sub - they can skip
+          } else if (!hasSubscription) {
+            setPage('plan-picker');
           } else {
             setPage('dashboard');
           }
@@ -998,11 +1003,14 @@ export default function App() {
       }
       const profile = await getProfile();
       setUser({ email: profile.email, plan: profile.plan });
-      // Check if they have active subscription (allow 'active' or 'past_due' - they paid)
-      if (!profile.subscription_status || (profile.subscription_status !== 'active' && profile.subscription_status !== 'past_due')) {
-        setPage('plan-picker');
+      // Priority: if not onboarded yet, go to onboarding (even if subscription check hasn't updated)
+      const hasSubscription = profile.subscription_status === 'active' || profile.subscription_status === 'past_due';
+      if (!profile.onboarding_complete && hasSubscription) {
+        setPage('onboarding');
       } else if (!profile.onboarding_complete) {
         setPage('onboarding');
+      } else if (!hasSubscription) {
+        setPage('plan-picker');
       } else {
         setPage('dashboard');
       }
