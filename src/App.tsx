@@ -387,16 +387,111 @@ const Input = ({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> 
 
 // --- Dashboard Sub-Views ---
 
+const SettingsPanel = ({ user, onClose, onLogout }: { user: { email: string, plan: Plan }, onClose: () => void, onLogout: () => void }) => {
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [apiKeyHint, setApiKeyHint] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
+  const [keyMessage, setKeyMessage] = useState<string | null>(null);
+  
+  // Load profile to get API key hint
+  useEffect(() => {
+    getProfile().then(p => {
+      setApiKeyHint(p.key_hint || '');
+    }).catch(console.error);
+  }, []);
+  
+  const handleSaveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    setSavingKey(true);
+    setKeyMessage(null);
+    try {
+      await saveApiKey(apiKeyInput);
+      setKeyMessage('✓ API key updated');
+      setApiKeyHint(apiKeyInput.slice(-4));
+      setApiKeyInput('');
+    } catch (e: any) {
+      setKeyMessage(e.message || 'Failed to save');
+    }
+    setSavingKey(false);
+  };
+  
+  const handleManageSubscription = async () => {
+    try {
+      const { url } = await openBillingPortal();
+      window.location.href = url;
+    } catch (e) {
+      console.error('Failed to open billing:', e);
+    }
+  };
+  
+  return (
+    <div className="p-6 space-y-8">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">Settings</h2>
+        <button onClick={onClose} className="p-2 hover:bg-cl-interactive rounded"><X size={20} /></button>
+      </div>
+      
+      {/* API Key Section */}
+      <div className="space-y-3">
+        <div className="text-sm font-bold uppercase tracking-widest text-cl-muted">API Key</div>
+        <div className="text-xs text-cl-muted">
+          Current key: ****{apiKeyHint}
+        </div>
+        <input 
+          type="password" 
+          value={apiKeyInput}
+          onChange={(e) => setApiKeyInput(e.target.value)}
+          placeholder="Enter new API key"
+          className="w-full bg-cl-bg border border-cl-border rounded px-3 py-2 text-sm"
+        />
+        <Button onClick={handleSaveApiKey} disabled={!apiKeyInput.trim() || savingKey} className="w-full">
+          {savingKey ? 'Saving...' : 'Update Key'}
+        </Button>
+        {keyMessage && (
+          <div className={`text-xs ${keyMessage.includes('✓') ? 'text-green-500' : 'text-red-400'}`}>{keyMessage}</div>
+        )}
+      </div>
+      
+      {/* Plan Section */}
+      <div className="space-y-3">
+        <div className="text-sm font-bold uppercase tracking-widest text-cl-muted">Plan</div>
+        <div className="flex items-center justify-between p-3 bg-cl-bg rounded border border-cl-border">
+          <span className="font-medium capitalize">{user.plan}</span>
+          <span className="text-sm text-cl-muted">{user.plan === 'pro' ? '$30/mo' : 'Free'}</span>
+        </div>
+        <Button onClick={handleManageSubscription} variant="secondary" className="w-full">
+          Manage Subscription
+        </Button>
+      </div>
+      
+      {/* Logout Section */}
+      <div className="pt-6 border-t border-cl-border">
+        <Button onClick={onLogout} variant="danger" className="w-full">
+          <LogOut size={16} /> Log Out
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const DashboardSidebar = ({ 
   email, 
   plan, 
   onLogout, 
-  onNavigate 
+  onNavigate,
+  sessions = [],
+  onNewChat,
+  onSessionClick,
+  onShowSettings
 }: { 
   email: string; 
   plan: Plan; 
   onLogout: () => void;
   onNavigate: (page: Page) => void;
+  sessions?: {id: string, title: string, created_at: string}[];
+  onNewChat?: () => void;
+  onSessionClick?: (id: string) => void;
+  onShowSettings?: () => void;
 }) => (
   <aside className="w-64 bg-cl-surface border-r border-cl-border flex flex-col shrink-0">
     <div className="p-6 flex items-center">
@@ -404,31 +499,27 @@ const DashboardSidebar = ({
     </div>
     
     <div className="px-4 mb-6">
-      <Button className="w-full py-2.5 bg-cl-interactive border-cl-interactive-hover hover:bg-cl-interactive-hover" variant="secondary" size="md">
+      <Button className="w-full py-2.5 bg-cl-interactive border-cl-interactive-hover hover:bg-cl-interactive-hover" variant="secondary" size="md" onClick={onNewChat}>
         <Plus size={16} /> New Chat
       </Button>
     </div>
 
     <nav className="flex-1 px-3 space-y-1 overflow-y-auto scrollbar-hide">
       <div className="text-[10px] uppercase tracking-widest text-cl-muted px-3 mb-2 font-bold">Recent Sessions</div>
-      {[
-        { name: 'Refactor Auth Middleware', time: '2h ago', active: true },
-        { name: 'Optimizing SQL Query for...', time: '3d ago' },
-        { name: 'Claude Code Terminal UI', time: '5d ago' },
-      ].map((s, i) => (
-        <div 
-          key={i} 
-          className={cn(
-            "p-2 rounded-md text-sm border-l-2 transition-all cursor-pointer group",
-            s.active 
-              ? "bg-cl-interactive border-cl-accent text-cl-text shadow-sm" 
-              : "border-transparent text-cl-sub-text hover:bg-cl-interactive hover:text-cl-text"
-          )}
-        >
-          <div className="truncate font-medium">{s.name}</div>
-          <div className="text-[10px] text-cl-muted mt-0.5">{s.time}</div>
-        </div>
-      ))}
+      {sessions.length === 0 ? (
+        <div className="text-xs text-cl-muted px-3 py-2">No sessions yet</div>
+      ) : (
+        sessions.map((s) => (
+          <div 
+            key={s.id} 
+            className="p-2 rounded-md text-sm border-l-2 transition-all cursor-pointer border-transparent text-cl-sub-text hover:bg-cl-interactive hover:text-cl-text"
+            onClick={() => onSessionClick?.(s.id)}
+          >
+            <div className="truncate font-medium">{s.title}</div>
+            <div className="text-[10px] text-cl-muted mt-0.5">{new Date(s.created_at).toLocaleDateString()}</div>
+          </div>
+        ))
+      )}
     </nav>
 
     <div className="p-4 mt-auto border-t border-cl-border">
@@ -452,7 +543,7 @@ const DashboardSidebar = ({
             )}>
               {plan}
             </span>
-            <span className="text-[10px] text-cl-muted cursor-pointer hover:text-cl-text transition-colors">Settings</span>
+            <button className="text-[10px] text-cl-muted cursor-pointer hover:text-cl-text transition-colors" onClick={onShowSettings}>Settings</button>
           </div>
         </div>
       </div>
@@ -517,6 +608,48 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
     if (activeTab === 'traces') {
       getTraces().then(t => setTracesData(t.traces || [])).catch(console.error);
     }
+  }, [activeTab]);
+
+  // SSE for activity tab
+  useEffect(() => {
+    if (activeTab !== 'activity') return;
+    
+    const connectSSE = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) return;
+        
+        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+        const response = await fetch(`${BACKEND_URL}/api/activity`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.body) return;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const text = decoder.decode(value);
+          const lines = text.split('\n');
+          
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
+              setActivityEvents(prev => [...prev.slice(-50), data]); // Keep last 50
+            } catch {}
+          }
+        }
+      } catch (e) {
+        console.error('SSE error:', e);
+      }
+    };
+    
+    connectSSE();
   }, [activeTab]);
 
   useEffect(() => {
@@ -610,7 +743,7 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
 
   return (
     <div className="h-screen flex bg-cl-bg overflow-hidden text-[#faf9f5]">
-      <DashboardSidebar email={user.email} plan={user.plan} onLogout={onLogout} onNavigate={() => {}} />
+      <DashboardSidebar email={user.email} plan={user.plan} onLogout={onLogout} onNavigate={() => {}} sessions={sessions} onNewChat={startNewChat} onSessionClick={handleSessionClick} onShowSettings={() => setShowSettings(true)} />
       
       <main className="flex-1 flex flex-col relative min-w-0">
         {/* HEADER / TAB BAR */}
@@ -808,47 +941,67 @@ const Dashboard = ({ user, onLogout }: { user: { email: string, plan: Plan }, on
                   <div className="flex items-center justify-between p-2 border-b border-cl-border">
                     <h2 className="text-lg font-bold">Live Activity Feed</h2>
                     <div className="flex items-center gap-2">
-                       <span className="w-2 h-2 rounded-full bg-cl-accent animate-pulse" />
-                       <span className="text-[10px] font-bold text-cl-muted uppercase tracking-widest">Active Connection</span>
+                       <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                       <span className="text-[10px] font-bold text-cl-muted uppercase tracking-widest">Live</span>
                     </div>
                   </div>
                   
-                  {[
-                    { type: 'Chat started', icon: Plus, model: 'Sonnet', time: 'Just now' },
-                    { type: 'Alert triggered', icon: AlertTriangle, model: 'System', time: '2m ago' },
-                    { type: 'Chat completed', icon: Check, model: 'Haiku', time: '5m ago' },
-                    { type: 'Session indexed', icon: Search, model: 'Global', time: '14m ago' },
-                    { type: 'Cleanup completed', icon: Settings, model: 'Worker', time: '1h ago' },
-                  ].map((e, i) => (
-                    <motion.div 
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      key={i} 
-                      className="flex gap-4 group"
-                    >
-                      <div className="flex flex-col items-center">
-                        <div className="w-10 h-10 rounded-full bg-cl-surface border border-cl-border flex items-center justify-center group-hover:border-cl-accent transition-colors">
-                          <e.icon size={16} className="text-cl-muted group-hover:text-cl-accent" />
-                        </div>
-                        <div className="w-px h-full bg-cl-border my-2" />
-                      </div>
-                      <div className="flex-grow pt-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm font-bold">{e.type}</span>
-                          <span className="text-[10px] text-cl-muted font-mono">{e.time}</span>
-                        </div>
-                        <div className="text-xs text-cl-muted bg-cl-surface/50 p-2 rounded-lg border border-cl-border border-dashed">
-                          Details: Model={e.model}, UserID=u_7892, Latency=142ms
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                  {activityEvents.length === 0 ? (
+                    <div className="text-center text-cl-muted py-8">Connecting to activity feed...</div>
+                  ) : (
+                    activityEvents.map((e, i) => {
+                      const IconComp = e.icon || Activity;
+                      return (
+                        <motion.div 
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.05 }}
+                          key={e.id || i} 
+                          className="flex gap-4 group"
+                        >
+                          <div className="flex flex-col items-center">
+                            <div className="w-10 h-10 rounded-full bg-cl-surface border border-cl-border flex items-center justify-center group-hover:border-cl-accent transition-colors">
+                              <IconComp size={16} className="text-cl-muted group-hover:text-cl-accent" />
+                            </div>
+                            <div className="w-px h-full bg-cl-border my-2" />
+                          </div>
+                          <div className="flex-grow pt-1">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-bold">{e.type}</span>
+                              <span className="text-[10px] text-cl-muted font-mono">{e.time}</span>
+                            </div>
+                            <div className="text-xs text-cl-muted bg-cl-surface/50 p-2 rounded-lg border border-cl-border border-dashed">
+                              {e.details}
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })
+                  )}
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* Settings Panel slide-over */}
+        {showSettings && (
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setShowSettings(false)} />
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              className="relative w-96 bg-cl-surface border-l border-cl-border h-full overflow-y-auto"
+            >
+              <SettingsPanel 
+                user={user} 
+                onClose={() => setShowSettings(false)} 
+                onLogout={onLogout}
+              />
+            </motion.div>
+          </div>
+        )}
       </main>
     </div>
   );
