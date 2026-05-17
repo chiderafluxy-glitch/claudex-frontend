@@ -917,7 +917,9 @@ export default function App() {
         try {
           const profile = await getProfile();
           setUser({ email: profile.email, plan: profile.plan });
-          if (!profile.onboarding_complete) {
+          if (!profile.subscription_status || profile.subscription_status !== 'active') {
+            setPage('plan-picker');
+          } else if (!profile.onboarding_complete) {
             setPage('onboarding');
           } else {
             setPage('dashboard');
@@ -973,7 +975,10 @@ export default function App() {
       if (error) { setAuthError(error.message); return; }
       const profile = await getProfile();
       setUser({ email: profile.email, plan: profile.plan });
-      if (!profile.onboarding_complete) {
+      // Check if they have active subscription
+      if (!profile.subscription_status || profile.subscription_status !== 'active') {
+        setPage('plan-picker');
+      } else if (!profile.onboarding_complete) {
         setPage('onboarding');
       } else {
         setPage('dashboard');
@@ -1028,7 +1033,7 @@ export default function App() {
 
         {page === 'signup' && (
           <motion.div key="signup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute top-20 left-4 z-50">
+            <div className="fixed top-6 left-6 z-50">
               <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
                 ← Back to Home
               </button>
@@ -1051,7 +1056,7 @@ export default function App() {
 
         {page === 'login' && (
           <motion.div key="login" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute top-20 left-4 z-50">
+            <div className="fixed top-6 left-6 z-50">
               <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
                 ← Back to Home
               </button>
@@ -1072,7 +1077,7 @@ export default function App() {
 
         {page === 'plan-picker' && (
           <motion.div key="plans" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="absolute top-20 left-4 z-50">
+            <div className="fixed top-6 left-6 z-50">
               <button onClick={() => setPage('landing')} className="text-sm text-cl-muted hover:text-cl-text flex items-center gap-2">
                 ← Back to Home
               </button>
@@ -1108,7 +1113,7 @@ export default function App() {
 
         {page === 'onboarding' && (
           <motion.div key="onboarding" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-             <div className="absolute top-20 left-4 z-50">
+             <div className="fixed top-6 left-6 z-50">
                <button onClick={async () => {
                  try {
                    await skipOnboarding();
