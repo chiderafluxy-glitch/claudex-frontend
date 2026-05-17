@@ -925,13 +925,15 @@ export default function App() {
         try {
           const profile = await getProfile();
           setUser({ email: profile.email, plan: profile.plan });
-          // Check subscription first: if they paid (active/past_due) and not onboarded → onboarding
-          // If no subscription → plan-picker (need to pay)
-          // If both done → dashboard
-          const hasSubscription = profile.subscription_status === 'active' || profile.subscription_status === 'past_due';
+          // Check subscription first: if they paid (active/past_due) and onboarding done → dashboard
+          // If they paid but not onboarded → onboarding
+          // If not paid yet → plan-picker
+          // Check if they have a valid subscription
+          const hasSubscription = !!profile.subscription_status && (profile.subscription_status === 'active' || profile.subscription_status === 'past_due');
+          const isOnboarded = profile.onboarding_complete === true;
           if (!hasSubscription) {
             setPage('plan-picker');
-          } else if (!profile.onboarding_complete) {
+          } else if (!isOnboarded) {
             setPage('onboarding');
           } else {
             setPage('dashboard');
@@ -1002,13 +1004,14 @@ export default function App() {
       }
       const profile = await getProfile();
       setUser({ email: profile.email, plan: profile.plan });
-      // Check subscription first: if they paid (active/past_due) and not onboarded → onboarding
-      // If no subscription → plan-picker (need to pay)
-      // If both done → dashboard
-      const hasSubscription = profile.subscription_status === 'active' || profile.subscription_status === 'past_due';
+      // Check subscription first: if they paid (active/past_due) and onboarding done → dashboard
+      // If they paid but not onboarded → onboarding
+      // If not paid yet → plan-picker
+      const hasSubscription = !!profile.subscription_status && (profile.subscription_status === 'active' || profile.subscription_status === 'past_due');
+      const isOnboarded = profile.onboarding_complete === true;
       if (!hasSubscription) {
         setPage('plan-picker');
-      } else if (!profile.onboarding_complete) {
+      } else if (!isOnboarded) {
         setPage('onboarding');
       } else {
         setPage('dashboard');
